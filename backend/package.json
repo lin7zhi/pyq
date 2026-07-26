@@ -14,6 +14,7 @@
     "db:migrate-footer-html": "ts-node src/scripts/migrate-footer-html.ts",
     "db:migrate-decoration-image": "ts-node src/scripts/migrate-decoration-image.ts",
     "db:migrate-content-pages": "ts-node src/scripts/migrate-content-pages.ts",
+    "db:migrate-catalog-item-fields": "ts-node src/scripts/migrate-catalog-item-fields.ts",
     "music:migrate-r2": "ts-node src/scripts/migrate-r2-music.ts"
   },
   "keywords": [],

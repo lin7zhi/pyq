@@ -8,6 +8,8 @@ interface CatalogItemAttributes {
   configuration: string;
   description: string;
   imageMediaId: string | null;
+  imageUrl: string;
+  linkUrl: string;
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
@@ -15,7 +17,7 @@ interface CatalogItemAttributes {
 
 type CatalogItemCreationAttributes = Optional<
   CatalogItemAttributes,
-  "id" | "configuration" | "description" | "imageMediaId" | "sortOrder" | "createdAt" | "updatedAt"
+  "id" | "configuration" | "description" | "imageMediaId" | "imageUrl" | "linkUrl" | "sortOrder" | "createdAt" | "updatedAt"
 >;
 
 class CatalogItem
@@ -28,6 +30,8 @@ class CatalogItem
   declare configuration: string;
   declare description: string;
   declare imageMediaId: string | null;
+  declare imageUrl: string;
+  declare linkUrl: string;
   declare sortOrder: number;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -63,6 +67,18 @@ CatalogItem.init(
       type: DataTypes.UUID,
       allowNull: true,
       field: "image_media_id",
+    },
+    imageUrl: {
+      type: DataTypes.STRING(500),
+      allowNull: false,
+      defaultValue: "",
+      field: "image_url",
+    },
+    linkUrl: {
+      type: DataTypes.STRING(2048),
+      allowNull: false,
+      defaultValue: "",
+      field: "link_url",
     },
     sortOrder: {
       type: DataTypes.INTEGER,

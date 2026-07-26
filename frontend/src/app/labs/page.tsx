@@ -27,5 +27,5 @@ async function getCatalog(): Promise<CatalogCategory[]> {
 
 export default async function LabsPage() {
   const [owner, categories] = await Promise.all([getOwner(), getCatalog()]);
-  return <CatalogPage owner={owner} title="Labs" description="这里收录正在尝试、研究与制作的小项目。" categories={categories} />;
+  return <CatalogPage owner={owner} title="Labs" description="这里收录正在尝试、研究与制作的小项目。" categories={categories} linkTitles />;
 }

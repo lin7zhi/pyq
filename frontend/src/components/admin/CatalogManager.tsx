@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, ImagePlus, Loader2, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, ImageIcon, ImagePlus, Library, Loader2, Pencil, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import MediaPicker, { type PickerMediaItem } from "@/components/MediaPicker";
-import { apiFetch } from "@/lib/api-fetch";
-import { toAbsoluteUrl } from "@/lib/upload";
+import { apiFetch, getToken } from "@/lib/api-fetch";
+import { toAbsoluteUrl, uploadDirect } from "@/lib/upload";
 
 type Collection = "equipment" | "labs";
 
@@ -15,6 +15,7 @@ interface CatalogItem {
   description: string;
   imageMediaId: string | null;
   imageUrl: string;
+  linkUrl: string;
   sortOrder: number;
 }
 
@@ -32,14 +33,32 @@ interface Props {
   description: string;
 }
 
-const emptyItem = { title: "", configuration: "", description: "", imageMediaId: null as string | null, imageUrl: "" };
-type ItemDraft = typeof emptyItem & { id?: string; categoryId: string };
+type CategoryDraft = { id?: string; name: string; intro: string };
+type ItemDraft = {
+  id?: string;
+  categoryId: string;
+  title: string;
+  configuration: string;
+  description: string;
+  imageMediaId: string | null;
+  imageUrl: string;
+  linkUrl: string;
+};
+
+const emptyItem = (): Omit<ItemDraft, "categoryId"> => ({
+  title: "",
+  configuration: "",
+  description: "",
+  imageMediaId: null,
+  imageUrl: "",
+  linkUrl: "",
+});
 
 export default function CatalogManager({ collection, title, description }: Props) {
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<{ id?: string; name: string; intro: string } | null>(null);
+  const [editingCategory, setEditingCategory] = useState<CategoryDraft | null>(null);
   const [editingItem, setEditingItem] = useState<ItemDraft | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -70,6 +89,24 @@ export default function CatalogManager({ collection, title, description }: Props
     }
   };
 
+  const openCategory = (draft: CategoryDraft) => {
+    setEditingItem(null);
+    setPickerOpen(false);
+    setEditingCategory(draft);
+  };
+
+  const openItem = (draft: ItemDraft) => {
+    setEditingCategory(null);
+    setPickerOpen(false);
+    setEditingItem(draft);
+  };
+
+  const closeEditors = () => {
+    setEditingCategory(null);
+    setEditingItem(null);
+    setPickerOpen(false);
+  };
+
   const saveCategory = async () => {
     if (!editingCategory?.name.trim()) return alert("请输入分类名称");
     setSaving(true);
@@ -79,7 +116,7 @@ export default function CatalogManager({ collection, title, description }: Props
       } else {
         await request(`/admin/catalog/${collection}/categories`, "POST", { name: editingCategory.name.trim(), intro: editingCategory.intro.trim() });
       }
-      setEditingCategory(null);
+      closeEditors();
       await load();
     } catch (error) {
       alert(error instanceof Error ? error.message : "保存失败");
@@ -97,10 +134,12 @@ export default function CatalogManager({ collection, title, description }: Props
         configuration: editingItem.configuration.trim(),
         description: editingItem.description.trim(),
         imageMediaId: editingItem.imageMediaId,
+        imageUrl: editingItem.imageMediaId ? "" : editingItem.imageUrl.trim(),
+        linkUrl: collection === "labs" ? editingItem.linkUrl.trim() : "",
       };
       if (editingItem.id) await request(`/admin/catalog/${collection}/items/${editingItem.id}`, "PUT", body);
       else await request(`/admin/catalog/${collection}/items`, "POST", { ...body, categoryId: editingItem.categoryId });
-      setEditingItem(null);
+      closeEditors();
       await load();
     } catch (error) {
       alert(error instanceof Error ? error.message : "保存失败");
@@ -143,14 +182,14 @@ export default function CatalogManager({ collection, title, description }: Props
           <h1 className="text-xl font-bold text-adm-text">{title}</h1>
           <p className="mt-1 text-sm text-adm-text-secondary">{description}</p>
         </div>
-        <button onClick={() => setEditingCategory({ name: "", intro: "" })} className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-gray-900">
+        <button onClick={() => openCategory({ name: "", intro: "" })} className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-gray-900">
           <Plus className="h-4 w-4" /> 新建分类
         </button>
       </div>
 
-      {editingCategory && <EditCategory data={editingCategory} setData={setEditingCategory} onSave={saveCategory} onClose={() => setEditingCategory(null)} saving={saving} />}
-      {editingItem && <EditItem data={editingItem} setData={setEditingItem} onSave={saveItem} onClose={() => setEditingItem(null)} onPick={() => setPickerOpen(true)} saving={saving} />}
-      <MediaPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={selectImage} category="image" title="选择卡片图片" />
+      {editingCategory && <EditCategory data={editingCategory} setData={setEditingCategory} onSave={saveCategory} onClose={closeEditors} saving={saving} />}
+      {editingItem && <EditItem collection={collection} data={editingItem} setData={setEditingItem} onSave={saveItem} onClose={closeEditors} onPick={() => setPickerOpen(true)} saving={saving} />}
+      {editingItem && <MediaPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={selectImage} category="image" title="选择卡片图片" />}
 
       {loading ? <div className="flex h-48 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-adm-text-tertiary" /></div> : categories.length === 0 ? (
         <div className="rounded-xl border border-dashed border-adm-border py-16 text-center text-sm text-adm-text-secondary">还没有分类，先新建一个吧。</div>
@@ -161,10 +200,10 @@ export default function CatalogManager({ collection, title, description }: Props
               <div className="flex items-start justify-between gap-3 border-b border-adm-border p-4">
                 <div><h2 className="font-semibold text-adm-text">{category.name}</h2>{category.intro && <p className="mt-1 text-sm text-adm-text-secondary">{category.intro}</p>}</div>
                 <div className="flex items-center gap-1">
-                  <IconButton title="上移" onClick={() => move("categories", category.id, category.sortOrder, -1)}><ChevronUp /></IconButton>
-                  <IconButton title="下移" onClick={() => move("categories", category.id, category.sortOrder, 1)}><ChevronDown /></IconButton>
-                  <IconButton title="编辑" onClick={() => setEditingCategory(category)}><Pencil /></IconButton>
-                  <IconButton title="删除" danger onClick={() => remove("categories", category.id)}><Trash2 /></IconButton>
+                  <IconButton title="上移" onClick={() => move("categories", category.id, category.sortOrder, -1)}><ChevronUp className="h-4 w-4" /></IconButton>
+                  <IconButton title="下移" onClick={() => move("categories", category.id, category.sortOrder, 1)}><ChevronDown className="h-4 w-4" /></IconButton>
+                  <IconButton title="编辑" onClick={() => openCategory(category)}><Pencil className="h-4 w-4" /></IconButton>
+                  <IconButton title="删除" danger onClick={() => remove("categories", category.id)}><Trash2 className="h-4 w-4" /></IconButton>
                 </div>
               </div>
               <div className="space-y-2 p-4">
@@ -174,10 +213,10 @@ export default function CatalogManager({ collection, title, description }: Props
                       {item.imageUrl ? <img src={toAbsoluteUrl(item.imageUrl)} alt="" className="h-full w-full object-contain" /> : <ImagePlus className="h-4 w-4 text-adm-text-tertiary" />}
                     </div>
                     <div className="min-w-0 flex-1"><p className="font-medium text-adm-text">{item.title}</p><p className="truncate text-xs text-adm-text-secondary">{item.configuration || item.description || "未填写说明"}</p></div>
-                    <div className="flex gap-1"><IconButton title="上移" onClick={() => move("items", item.id, item.sortOrder, -1)}><ChevronUp /></IconButton><IconButton title="下移" onClick={() => move("items", item.id, item.sortOrder, 1)}><ChevronDown /></IconButton><IconButton title="编辑" onClick={() => setEditingItem({ ...item, categoryId: category.id })}><Pencil /></IconButton><IconButton title="删除" danger onClick={() => remove("items", item.id)}><Trash2 /></IconButton></div>
+                    <div className="flex gap-1"><IconButton title="上移" onClick={() => move("items", item.id, item.sortOrder, -1)}><ChevronUp className="h-4 w-4" /></IconButton><IconButton title="下移" onClick={() => move("items", item.id, item.sortOrder, 1)}><ChevronDown className="h-4 w-4" /></IconButton><IconButton title="编辑" onClick={() => openItem({ ...item, categoryId: category.id })}><Pencil className="h-4 w-4" /></IconButton><IconButton title="删除" danger onClick={() => remove("items", item.id)}><Trash2 className="h-4 w-4" /></IconButton></div>
                   </div>
                 ))}
-                <button onClick={() => setEditingItem({ ...emptyItem, categoryId: category.id })} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-adm-border py-2 text-sm text-adm-text-secondary hover:bg-adm-card-hover"><Plus className="h-4 w-4" /> 添加卡片</button>
+                <button onClick={() => openItem({ ...emptyItem(), categoryId: category.id })} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-adm-border py-2 text-sm text-adm-text-secondary hover:bg-adm-card-hover"><Plus className="h-4 w-4" /> 添加卡片</button>
               </div>
             </section>
           ))}
@@ -188,13 +227,29 @@ export default function CatalogManager({ collection, title, description }: Props
 }
 
 function IconButton({ children, title, onClick, danger = false }: { children: React.ReactNode; title: string; onClick: () => void; danger?: boolean }) {
-  return <button title={title} onClick={onClick} className={`rounded-md p-1.5 transition-colors hover:bg-adm-input ${danger ? "text-adm-danger" : "text-adm-text-secondary"}`}>{children as React.ReactElement<{ className?: string }>}</button>;
+  return <button type="button" title={title} onClick={onClick} className={`rounded-md p-1.5 transition-colors hover:bg-adm-input ${danger ? "text-adm-danger" : "text-adm-text-secondary"}`}>{children}</button>;
 }
 
-function EditCategory({ data, setData, onSave, onClose, saving }: { data: { id?: string; name: string; intro: string }; setData: (data: { id?: string; name: string; intro: string }) => void; onSave: () => void; onClose: () => void; saving: boolean }) {
-  return <div className="mb-4 rounded-xl border border-adm-border bg-adm-card p-4"><div className="mb-3 flex justify-between"><h2 className="font-semibold text-adm-text">{data.id ? "编辑分类" : "新建分类"}</h2><button onClick={onClose}><X className="h-4 w-4" /></button></div><div className="space-y-3"><input value={data.name} onChange={(e) => setData({ ...data, name: e.target.value })} placeholder="分类名称" className="w-full rounded-lg border border-adm-border bg-adm-input px-3 py-2 text-sm" /><textarea value={data.intro} onChange={(e) => setData({ ...data, intro: e.target.value })} placeholder="一句话简介" className="w-full rounded-lg border border-adm-border bg-adm-input px-3 py-2 text-sm" rows={2} /><button onClick={onSave} disabled={saving} className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-sm text-white dark:bg-white dark:text-gray-900">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}保存</button></div></div>;
+function EditCategory({ data, setData, onSave, onClose, saving }: { data: CategoryDraft; setData: (data: CategoryDraft) => void; onSave: () => void; onClose: () => void; saving: boolean }) {
+  return <div className="mb-4 rounded-xl border border-adm-border bg-adm-card p-4"><div className="mb-3 flex justify-between"><h2 className="font-semibold text-adm-text">{data.id ? "编辑分类" : "新建分类"}</h2><button type="button" onClick={onClose}><X className="h-4 w-4" /></button></div><div className="space-y-3"><input value={data.name} onChange={(e) => setData({ ...data, name: e.target.value })} placeholder="分类名称" className="w-full rounded-lg border border-adm-border bg-adm-input px-3 py-2 text-sm" /><textarea value={data.intro} onChange={(e) => setData({ ...data, intro: e.target.value })} placeholder="一句话简介" className="w-full rounded-lg border border-adm-border bg-adm-input px-3 py-2 text-sm" rows={2} /><button type="button" onClick={onSave} disabled={saving} className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-sm text-white dark:bg-white dark:text-gray-900">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}保存</button></div></div>;
 }
 
-function EditItem({ data, setData, onSave, onClose, onPick, saving }: { data: ItemDraft; setData: (data: ItemDraft) => void; onSave: () => void; onClose: () => void; onPick: () => void; saving: boolean }) {
-  return <div className="mb-4 rounded-xl border border-adm-border bg-adm-card p-4"><div className="mb-3 flex justify-between"><h2 className="font-semibold text-adm-text">{data.id ? "编辑卡片" : "添加卡片"}</h2><button onClick={onClose}><X className="h-4 w-4" /></button></div><div className="grid gap-3 md:grid-cols-[120px_1fr]"><button onClick={onPick} className="flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-dashed border-adm-border bg-white">{data.imageUrl ? <img src={toAbsoluteUrl(data.imageUrl)} alt="预览" className="h-full w-full object-contain" /> : <ImagePlus className="h-5 w-5 text-adm-text-tertiary" />}</button><div className="space-y-3"><input value={data.title} onChange={(e) => setData({ ...data, title: e.target.value })} placeholder="设备或项目名称" className="w-full rounded-lg border border-adm-border bg-adm-input px-3 py-2 text-sm" /><input value={data.configuration} onChange={(e) => setData({ ...data, configuration: e.target.value })} placeholder="配置 / 副标题" className="w-full rounded-lg border border-adm-border bg-adm-input px-3 py-2 text-sm" /><textarea value={data.description} onChange={(e) => setData({ ...data, description: e.target.value })} placeholder="2~3 行简介" className="w-full rounded-lg border border-adm-border bg-adm-input px-3 py-2 text-sm" rows={3} /><button onClick={onSave} disabled={saving} className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-sm text-white dark:bg-white dark:text-gray-900">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}保存</button></div></div></div>;
+function EditItem({ collection, data, setData, onSave, onClose, onPick, saving }: { collection: Collection; data: ItemDraft; setData: (data: ItemDraft) => void; onSave: () => void; onClose: () => void; onPick: () => void; saving: boolean }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const isLabs = collection === "labs";
+  const handleUpload = async (file: File) => {
+    const token = getToken();
+    if (!token) return alert("请先登录");
+    setUploading(true);
+    try {
+      const media = await uploadDirect(file, token, "image");
+      setData({ ...data, imageMediaId: media.id, imageUrl: media.url });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "上传失败");
+    } finally {
+      setUploading(false);
+    }
+  };
+  return <div className="mb-4 rounded-xl border border-adm-border bg-adm-card p-4"><div className="mb-3 flex justify-between"><h2 className="font-semibold text-adm-text">{data.id ? "编辑卡片" : "添加卡片"}</h2><button type="button" onClick={onClose}><X className="h-4 w-4" /></button></div><div className="grid gap-4 md:grid-cols-[150px_1fr]"><div className="space-y-2"><div className="flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-dashed border-adm-border bg-white">{data.imageUrl ? <img src={toAbsoluteUrl(data.imageUrl)} alt="预览" className="h-full w-full object-contain" /> : <ImageIcon className="h-6 w-6 text-adm-text-tertiary" />}</div><button type="button" onClick={() => setData({ ...data, imageMediaId: null, imageUrl: "" })} disabled={!data.imageUrl} className="w-full rounded-lg py-1 text-xs text-adm-text-tertiary hover:bg-adm-card-hover disabled:opacity-40">清除图片</button></div><div className="space-y-3"><input value={data.title} onChange={(e) => setData({ ...data, title: e.target.value })} placeholder={isLabs ? "项目名称" : "设备名称"} className="w-full rounded-lg border border-adm-border bg-adm-input px-3 py-2 text-sm" /><input value={data.configuration} onChange={(e) => setData({ ...data, configuration: e.target.value })} placeholder="配置 / 副标题" className="w-full rounded-lg border border-adm-border bg-adm-input px-3 py-2 text-sm" />{isLabs && <input type="url" value={data.linkUrl} onChange={(e) => setData({ ...data, linkUrl: e.target.value })} placeholder="项目链接（https://，选填）" className="w-full rounded-lg border border-adm-border bg-adm-input px-3 py-2 text-sm" />}<textarea value={data.description} onChange={(e) => setData({ ...data, description: e.target.value })} placeholder="2~3 行简介" className="w-full rounded-lg border border-adm-border bg-adm-input px-3 py-2 text-sm" rows={3} /><div className="space-y-2 rounded-xl border border-adm-border p-3"><input value={data.imageMediaId ? "" : data.imageUrl} onChange={(e) => setData({ ...data, imageMediaId: null, imageUrl: e.target.value })} placeholder="输入 HTTPS 图片 URL 或上传" className="w-full rounded-lg border border-adm-border bg-adm-input px-3 py-2 text-sm" /><div className="flex flex-wrap gap-2"><button type="button" onClick={() => inputRef.current?.click()} disabled={uploading} className="flex items-center gap-1.5 rounded-lg border border-adm-border bg-adm-card px-3 py-1.5 text-xs text-adm-text-secondary hover:bg-adm-card-hover disabled:opacity-50"><Upload className="h-3.5 w-3.5" />{uploading ? "上传中..." : "上传图片"}</button><button type="button" onClick={onPick} className="flex items-center gap-1.5 rounded-lg border border-adm-border bg-adm-card px-3 py-1.5 text-xs text-adm-text-secondary hover:bg-adm-card-hover"><Library className="h-3.5 w-3.5" />媒体库</button></div><input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleUpload(file); e.target.value = ""; }} /></div><button type="button" onClick={onSave} disabled={saving} className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-sm text-white dark:bg-white dark:text-gray-900">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}保存</button></div></div></div>;
 }

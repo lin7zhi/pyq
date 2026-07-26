@@ -1,4 +1,3 @@
-import Image from "next/image";
 import type { User } from "@/lib/mock-data";
 import { toAbsoluteUrl } from "@/lib/upload";
 import SpecialPageLayout from "@/components/SpecialPageLayout";
@@ -11,6 +10,7 @@ export interface CatalogItem {
   configuration: string;
   description: string;
   imageUrl: string;
+  linkUrl: string;
 }
 
 export interface CatalogCategory {
@@ -26,9 +26,10 @@ interface CatalogPageProps {
   description: string;
   categories: CatalogCategory[];
   showToc?: boolean;
+  linkTitles?: boolean;
 }
 
-export default function CatalogPage({ owner, title, description, categories, showToc = false }: CatalogPageProps) {
+export default function CatalogPage({ owner, title, description, categories, showToc = false, linkTitles = false }: CatalogPageProps) {
   return (
     <SpecialPageLayout owner={owner} showToc={showToc}>
       <article className="px-4 pb-12 pt-4 md:px-6">
@@ -54,20 +55,30 @@ export default function CatalogPage({ owner, title, description, categories, sho
                       >
                         <div className="relative flex aspect-[16/9] items-center justify-center bg-white p-5 dark:bg-[#f7f7f7]">
                           {item.imageUrl ? (
-                            <Image
+                            // 外部 URL 无法在构建期预先列入 Next Image 白名单，统一使用原生图片。
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
                               src={toAbsoluteUrl(item.imageUrl)}
                               alt={item.title}
-                              fill
-                              sizes="(max-width: 640px) 100vw, 280px"
-                              className="object-contain p-5"
-                              unoptimized
+                              className="h-full w-full object-contain p-5"
                             />
                           ) : (
                             <span className="text-xs text-gray-400">暂无图片</span>
                           )}
                         </div>
                         <div className="p-4">
-                          <h3 className="text-[16px] font-semibold text-wechat-text dark:text-white">{item.title}</h3>
+                          {linkTitles && item.linkUrl ? (
+                            <a
+                              href={item.linkUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[16px] font-semibold text-wechat-text transition-colors hover:text-wechat-nickname dark:text-white"
+                            >
+                              {item.title}
+                            </a>
+                          ) : (
+                            <h3 className="text-[16px] font-semibold text-wechat-text dark:text-white">{item.title}</h3>
+                          )}
                           {item.configuration && <p className="mt-1 text-[12px] text-wechat-time">{item.configuration}</p>}
                           {item.description && <p className="mt-3 line-clamp-3 text-[13px] leading-5 text-wechat-text-secondary dark:text-gray-300">{item.description}</p>}
                         </div>

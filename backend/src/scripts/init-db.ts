@@ -6,6 +6,7 @@ import { migrateFontFamily } from "./migrate-font-family";
 import { migrateDoubanCache } from "./migrate-douban-cache";
 import { migrateFooterHtml } from "./migrate-footer-html";
 import { migrateDecorationImage } from "./migrate-decoration-image";
+import { migrateCatalogItemFields } from "./migrate-catalog-item-fields";
 
 const DEFAULT_PLAYLIST_SLUG = "site-default";
 
@@ -104,6 +105,7 @@ export async function initializeDatabase() {
   await migrateFontFamily();
   await migrateFooterHtml();
   await migrateDecorationImage();
+  await migrateCatalogItemFields();
 
   await ensureSiteSettings();
   await ensureDefaultPlaylist();

@@ -229,7 +229,8 @@ function formatCatalog(categories: any[]) {
         configuration: item.configuration,
         description: item.description,
         imageMediaId: item.imageMediaId,
-        imageUrl: item.imageMedia?.url || "",
+        imageUrl: item.imageMedia?.url || item.imageUrl || "",
+        linkUrl: item.linkUrl || "",
         sortOrder: item.sortOrder,
       })),
     })),
@@ -313,6 +314,18 @@ router.delete("/admin/catalog/:collection/categories/:id", authenticate, require
   res.status(204).send();
 });
 
+async function validateExternalUrl(value: unknown, label: string, maxLength: number) {
+  if (value == null || value === "") return "";
+  if (typeof value !== "string" || value.length > maxLength) throw new Error(`${label}无效`);
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "https:") throw new Error();
+    return url.toString();
+  } catch {
+    throw new Error(`${label}必须是有效的 HTTPS 地址`);
+  }
+}
+
 async function validateImageMedia(id: unknown, userId: string) {
   if (id == null || id === "") return null;
   if (typeof id !== "string") throw new Error("图片无效");
@@ -325,7 +338,16 @@ router.post(
   "/admin/catalog/:collection/items",
   authenticate,
   requireAdmin,
-  [param("collection").isIn(["equipment", "labs"]), body("categoryId").isUUID(), body("title").trim().isLength({ min: 1, max: 200 }), body("configuration").optional().isString().isLength({ max: 300 }), body("description").optional().isString().isLength({ max: 5000 }), body("imageMediaId").optional({ nullable: true }).isUUID()],
+  [
+    param("collection").isIn(["equipment", "labs"]),
+    body("categoryId").isUUID(),
+    body("title").trim().isLength({ min: 1, max: 200 }),
+    body("configuration").optional().isString().isLength({ max: 300 }),
+    body("description").optional().isString().isLength({ max: 5000 }),
+    body("imageMediaId").optional({ nullable: true }).isUUID(),
+    body("imageUrl").optional().isString().isLength({ max: 500 }),
+    body("linkUrl").optional().isString().isLength({ max: 2048 }),
+  ],
   async (req: AuthRequest, res: Response) => {
     if (!ensureValid(req, res)) return;
     const collection = collectionFrom(req.params.collection)!;
@@ -335,9 +357,12 @@ router.post(
       return;
     }
     try {
-      const imageMediaId = await validateImageMedia(req.body.imageMediaId, req.user!.id);
+      const imageUrl = await validateExternalUrl(req.body.imageUrl, "图片地址", 500);
+      if (imageUrl && req.body.imageMediaId) throw new Error("图片地址和媒体库图片不能同时设置");
+      const imageMediaId = imageUrl ? null : await validateImageMedia(req.body.imageMediaId, req.user!.id);
+      const linkUrl = collection === "labs" ? await validateExternalUrl(req.body.linkUrl, "项目链接", 2048) : "";
       const sortOrder = await CatalogItem.count({ where: { categoryId: category.id } });
-      const item = await CatalogItem.create({ categoryId: category.id, title: req.body.title, configuration: req.body.configuration || "", description: req.body.description || "", imageMediaId, sortOrder });
+      const item = await CatalogItem.create({ categoryId: category.id, title: req.body.title, configuration: req.body.configuration || "", description: req.body.description || "", imageMediaId, imageUrl, linkUrl, sortOrder });
       void triggerRevalidate();
       res.status(201).json(item);
     } catch (error) {
@@ -350,7 +375,16 @@ router.put(
   "/admin/catalog/:collection/items/:id",
   authenticate,
   requireAdmin,
-  [param("id").isUUID(), body("title").optional().trim().isLength({ min: 1, max: 200 }), body("configuration").optional().isString().isLength({ max: 300 }), body("description").optional().isString().isLength({ max: 5000 }), body("imageMediaId").optional({ nullable: true }).isUUID(), body("sortOrder").optional().isInt({ min: 0, max: 10_000 })],
+  [
+    param("id").isUUID(),
+    body("title").optional().trim().isLength({ min: 1, max: 200 }),
+    body("configuration").optional().isString().isLength({ max: 300 }),
+    body("description").optional().isString().isLength({ max: 5000 }),
+    body("imageMediaId").optional({ nullable: true }).isUUID(),
+    body("imageUrl").optional().isString().isLength({ max: 500 }),
+    body("linkUrl").optional().isString().isLength({ max: 2048 }),
+    body("sortOrder").optional().isInt({ min: 0, max: 10_000 }),
+  ],
   async (req: AuthRequest, res: Response) => {
     if (!ensureValid(req, res)) return;
     const collection = collectionFrom(req.params.collection);
@@ -360,8 +394,18 @@ router.put(
       return;
     }
     try {
-      const imageMediaId = "imageMediaId" in req.body ? await validateImageMedia(req.body.imageMediaId, req.user!.id) : item.imageMediaId;
-      await item.update({ ...("title" in req.body ? { title: req.body.title } : {}), ...("configuration" in req.body ? { configuration: req.body.configuration } : {}), ...("description" in req.body ? { description: req.body.description } : {}), imageMediaId, ...("sortOrder" in req.body ? { sortOrder: req.body.sortOrder } : {}) });
+      const requestedImageUrl = "imageUrl" in req.body ? await validateExternalUrl(req.body.imageUrl, "图片地址", 500) : item.imageUrl;
+      if (requestedImageUrl && req.body.imageMediaId) throw new Error("图片地址和媒体库图片不能同时设置");
+      const imageMediaId = requestedImageUrl
+        ? null
+        : "imageMediaId" in req.body
+          ? await validateImageMedia(req.body.imageMediaId, req.user!.id)
+          : item.imageMediaId;
+      const imageUrl = imageMediaId ? "" : requestedImageUrl;
+      const linkUrl = collection === "labs"
+        ? ("linkUrl" in req.body ? await validateExternalUrl(req.body.linkUrl, "项目链接", 2048) : item.linkUrl)
+        : "";
+      await item.update({ ...("title" in req.body ? { title: req.body.title } : {}), ...("configuration" in req.body ? { configuration: req.body.configuration } : {}), ...("description" in req.body ? { description: req.body.description } : {}), imageMediaId, imageUrl, linkUrl, ...("sortOrder" in req.body ? { sortOrder: req.body.sortOrder } : {}) });
       void triggerRevalidate();
       res.json(item);
     } catch (error) {
