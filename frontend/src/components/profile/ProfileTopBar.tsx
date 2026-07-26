@@ -15,9 +15,11 @@ interface ProfileTopBarProps {
   surfaceColor?: "bg" | "white";
   /** 文章详情页滚动渐变：顶部透明（透出白色卡片=白），下滑渐变为灰色 */
   scrollFade?: boolean;
+  /** 文章和固定功能页指定后始终返回该路径，不使用浏览器历史回退。 */
+  backHref?: string;
 }
 
-export default function ProfileTopBar({ coverHeight = 300, initialBgAlpha = 0, surfaceColor = "bg", scrollFade = false }: ProfileTopBarProps) {
+export default function ProfileTopBar({ coverHeight = 300, initialBgAlpha = 0, surfaceColor = "bg", scrollFade = false, backHref }: ProfileTopBarProps) {
   const router = useRouter();
   const [bgAlpha, setBgAlpha] = useState(scrollFade ? 0 : initialBgAlpha);
   const coverHeightRef = useRef(coverHeight);
@@ -145,21 +147,22 @@ export default function ProfileTopBar({ coverHeight = 300, initialBgAlpha = 0, s
   };
 
   const handleBack = () => {
+    const navigate = () => {
+      if (backHref) {
+        router.push(backHref);
+      } else if (window.history.length > 1) {
+        router.back();
+      } else {
+        router.push("/");
+      }
+    };
     const el = document.getElementById("profile-content");
     if (el && !el.classList.contains("opacity-0")) {
       el.classList.remove("profile-fade-in");
       el.classList.add("profile-fade-out");
-      el.addEventListener(
-        "animationend",
-        () => {
-          if (window.history.length > 1) router.back();
-          else router.push("/");
-        },
-        { once: true }
-      );
+      el.addEventListener("animationend", navigate, { once: true });
     } else {
-      if (window.history.length > 1) router.back();
-      else router.push("/");
+      navigate();
     }
   };
 

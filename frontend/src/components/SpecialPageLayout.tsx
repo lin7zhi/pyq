@@ -25,7 +25,7 @@ export default function SpecialPageLayout({ owner, children, showToc = false }: 
           id="scroll-root"
           className="md:fixed md:top-6 md:left-[calc(50%-300px)] md:z-10 md:h-[calc(100vh-24px)] md:w-[600px] md:overflow-y-auto md:overflow-x-hidden md:rounded-2xl md:bg-wechat-white md:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.12)] dark:md:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.4)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          <ProfileTopBar surfaceColor="white" initialBgAlpha={1} />
+          <ProfileTopBar surfaceColor="white" initialBgAlpha={1} backHref="/" />
           <main className="relative flex min-h-[calc(100vh-3rem)] w-full flex-col bg-wechat-white pb-8 pt-12 md:min-h-[calc(100vh-4rem)] md:pb-12">
             <ProfileFadeIn>
               <div className="flex-1">{children}</div>

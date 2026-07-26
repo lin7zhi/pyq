@@ -438,7 +438,7 @@ export default function Sidebar({ owner }: SidebarProps) {
         {/* Function card */}
         <div className="overflow-hidden rounded-2xl bg-wechat-white p-4 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.4)]">
           <h3 className="mb-2 text-sm font-semibold text-wechat-text">功能卡片</h3>
-          <nav className="overflow-hidden rounded-xl border border-black/5 dark:border-white/10">
+          <nav className="grid grid-cols-3 overflow-hidden rounded-xl border border-black/5 dark:border-white/10">
             {[
               { href: "/about", label: "关于", icon: Info },
               { href: "/equipment", label: "装备", icon: MonitorSmartphone },
@@ -447,11 +447,11 @@ export default function Sidebar({ owner }: SidebarProps) {
               <Link
                 key={href}
                 href={href}
-                className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-[13px] text-wechat-text transition-colors hover:bg-wechat-hover dark:hover:bg-white/5 ${
-                  index > 0 ? "border-t border-black/5 dark:border-white/10" : ""
+                className={`flex min-h-16 flex-col items-center justify-center gap-1 px-1 py-2 text-[13px] text-wechat-text transition-colors hover:bg-wechat-hover dark:hover:bg-white/5 ${
+                  index > 0 ? "border-l border-black/5 dark:border-white/10" : ""
                 }`}
               >
-                <Icon className="h-4 w-4 text-wechat-nickname" />
+                <Icon className="h-[18px] w-[18px] text-wechat-nickname" />
                 <span>{label}</span>
               </Link>
             ))}
