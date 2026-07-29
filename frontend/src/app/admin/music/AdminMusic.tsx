@@ -50,6 +50,7 @@ export default function AdminMusic() {
         pendingOrder.current = null;
         const response = await apiFetch("/music/admin/order", {
           method: "PUT",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ trackIds }),
         });
         if (!response.ok) {
@@ -100,6 +101,7 @@ export default function AdminMusic() {
     try {
       const response = await apiFetch("/music/admin", {
         method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, musicAutoplay: autoplay }),
       });
       if (!response.ok) throw new Error("保存歌单设置失败");

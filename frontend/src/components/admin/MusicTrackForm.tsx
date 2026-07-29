@@ -155,6 +155,7 @@ export default function MusicTrackForm({ track, onSaved, onCancel }: MusicTrackF
       }
       const response = await apiFetch(track ? `/music/admin/tracks/${track.id}` : "/music/admin/tracks", {
         method: track ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           audioMediaId: draft.audio.id,
           coverMediaId: cover?.id || null,
