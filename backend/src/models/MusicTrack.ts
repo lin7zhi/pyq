@@ -103,7 +103,6 @@ MusicTrack.init(
       { unique: true, fields: ["playlist_id", "sort_order"] },
       { fields: ["audio_media_id"] },
       { fields: ["cover_media_id"] },
-      { fields: ["lyric_media_id"] },
     ],
   }
 );
