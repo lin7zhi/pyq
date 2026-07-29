@@ -9,11 +9,10 @@ import {
   FileText,
   Loader2,
   Cloud,
-  HardDrive,
   Check,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
-import { toAbsoluteUrl } from "@/lib/upload";
+import { toAbsoluteUrl, type MediaKind } from "@/lib/upload";
 
 export interface PickerMediaItem {
   id: string;
@@ -23,6 +22,7 @@ export interface PickerMediaItem {
   mimeType: string;
   size: number;
   category: "image" | "video" | "audio" | "file";
+  kind: MediaKind;
   livePhotoVideo?: string | null;
   livePhotoImage?: string | null;
   createdAt: string;
@@ -33,19 +33,12 @@ interface MediaPickerProps {
   onClose: () => void;
   onSelect: (item: PickerMediaItem) => void;
   category?: "image" | "video" | "audio";
+  kind?: "lyric";
   title?: string;
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
-}
-
 function CategoryIcon({ item }: { item: PickerMediaItem }) {
-  if (item.category === "image" && item.livePhotoVideo) {
-    return <ImageIcon className="h-4 w-4 text-green-500" />;
-  }
+  if (item.category === "image" && item.livePhotoVideo) return <ImageIcon className="h-4 w-4 text-green-500" />;
   if (item.category === "image") return <ImageIcon className="h-4 w-4 text-blue-500" />;
   if (item.category === "video") return <Video className="h-4 w-4 text-purple-500" />;
   if (item.category === "audio") return <Music className="h-4 w-4 text-amber-500" />;
@@ -57,6 +50,7 @@ export default function MediaPicker({
   onClose,
   onSelect,
   category,
+  kind,
   title = "从媒体库选择",
 }: MediaPickerProps) {
   const [items, setItems] = useState<PickerMediaItem[]>([]);
@@ -76,6 +70,7 @@ export default function MediaPicker({
           limit: "24",
         });
         if (category) params.set("category", category);
+        if (kind) params.set("kind", kind);
         const res = await apiFetch(`/media?${params.toString()}`);
         if (!res.ok) throw new Error("加载失败");
         const data = await res.json();
@@ -89,15 +84,16 @@ export default function MediaPicker({
         setLoading(false);
         setLoadingMore(false);
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
-    [category]
+    [category, kind]
   );
 
   useEffect(() => {
     if (open) {
-      setSelectedId(null);
-      fetchItems(1, true);
+      Promise.resolve().then(() => {
+        setSelectedId(null);
+        void fetchItems(1, true);
+      });
     }
   }, [open, fetchItems]);
 
@@ -118,7 +114,7 @@ export default function MediaPicker({
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold text-adm-text">{title}</h3>
           <p className="text-xs text-adm-text-tertiary">
-            {category ? `仅显示${category === "image" ? "图片" : category === "video" ? "视频" : "音频"}` : "全部媒体"}
+            {kind === "lyric" ? "仅显示歌词文件" : category ? `仅显示${category === "image" ? "图片" : category === "video" ? "视频" : "音频"}` : "全部媒体"}
           </p>
         </div>
         <button

@@ -4,6 +4,7 @@ import sequelize from "../config/database";
 export type StorageType = "r2";
 
 export type MediaCategory = "image" | "video" | "audio" | "file";
+export type MediaKind = "image" | "video" | "audio" | "lyric" | "file";
 
 interface MediaAttributes {
   id: string;
@@ -11,6 +12,7 @@ interface MediaAttributes {
   url: string;
   storageType: StorageType;
   mimeType: string;
+  kind: MediaKind;
   size: number;
   uploaderId: string;
   /**
@@ -43,6 +45,7 @@ class Media
   declare url: string;
   declare storageType: StorageType;
   declare mimeType: string;
+  declare kind: MediaKind;
   declare size: number;
   declare uploaderId: string;
   declare livePhotoVideo: string | null;
@@ -75,6 +78,11 @@ Media.init(
       type: DataTypes.STRING(100),
       allowNull: false,
       defaultValue: "application/octet-stream",
+    },
+    kind: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: "file",
     },
     size: {
       type: DataTypes.BIGINT,

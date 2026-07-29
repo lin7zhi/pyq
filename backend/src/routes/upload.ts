@@ -30,7 +30,7 @@ const IMAGE_MIMES = ["image/jpeg", "image/png", "image/gif", "image/webp", "imag
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
 const VIDEO_MIMES = ["video/quicktime", "video/mp4", "video/webm", "video/3gpp", "video/3gp", "video/x-m4v"];
 const VIDEO_EXTS = [".mp4", ".mov", ".webm", ".3gp", ".m4v"];
-const AUDIO_MIMES = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/aac"];
+const AUDIO_MIMES = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/aac", "audio/mp4", "audio/flac", "audio/opus"];
 
 const imageUpload = multer({
   storage,
@@ -231,6 +231,7 @@ router.post("/confirm", authenticate, requireAdmin, async (req: AuthRequest, res
       url,
       storageType: "r2",
       mimeType: mimeType || "application/octet-stream",
+      kind: mimeType?.startsWith("audio/") ? "audio" : mimeType?.startsWith("image/") ? "image" : mimeType?.startsWith("video/") ? "video" : "file",
       size: Number(size) || 0,
       uploaderId: req.user!.id,
     });
@@ -274,6 +275,7 @@ router.post("/motion-photo/confirm", authenticate, requireAdmin, async (req: Aut
         url,
         storageType: "r2",
         mimeType: "image/jpeg",
+        kind: "image",
         size: buffer.length,
         uploaderId: req.user!.id,
       });

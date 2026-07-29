@@ -7,13 +7,15 @@ import { Router, Request, Response } from "express";
 import path from "path";
 import { Op } from "sequelize";
 import { param, validationResult } from "express-validator";
-import { CatalogItem, Media, MusicTrack, Post, UploadIntent, User, getMediaCategory } from "../models";
+import { CatalogItem, Media, MusicTrack, Post, UploadIntent, User, getMediaCategory, type MediaKind } from "../models";
 import { authenticate, requireAdmin, AuthRequest } from "../middleware/auth";
 import { deleteStoredFile, isR2Ready } from "../services/storage-service";
 import {
   buildObjectKey,
   buildStagingKey,
   createPresignedUploadForKey,
+  downloadFromR2,
+  extractR2Key,
   promoteR2Object,
   statR2Object,
 } from "../services/r2-service";
@@ -32,9 +34,14 @@ const DIRECT_UPLOAD_RULES = {
     maxSize: 100 * 1024 * 1024,
   },
   audio: {
-    mimes: new Set(["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/aac"]),
-    extensions: new Set([".mp3", ".wav", ".ogg", ".aac"]),
+    mimes: new Set(["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/aac", "audio/mp4", "audio/flac", "audio/opus"]),
+    extensions: new Set([".mp3", ".wav", ".ogg", ".aac", ".m4a", ".flac", ".opus"]),
     maxSize: 50 * 1024 * 1024,
+  },
+  lyric: {
+    mimes: new Set(["text/plain", "text/x-lrc", "application/x-lrc", "application/octet-stream"]),
+    extensions: new Set([".lrc"]),
+    maxSize: 1 * 1024 * 1024,
   },
   file: {
     mimes: new Set<string>(),
@@ -77,6 +84,7 @@ function formatMedia(media: any) {
     mimeType: media.mimeType,
     size: Number(media.size),
     category: getMediaCategory(media.mimeType),
+    kind: media.kind || getMediaCategory(media.mimeType),
     uploaderId: media.uploaderId,
     uploaderName: media.uploader?.nickname || media.uploader?.username || "",
     livePhotoVideo: media.livePhotoVideo || null,
@@ -95,11 +103,15 @@ router.get(
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 24));
     const offset = (page - 1) * limit;
     const category = req.query.category as string | undefined;
+    const kind = req.query.kind as string | undefined;
 
     const where: any = {};
+    if (kind && ["image", "video", "audio", "lyric", "file"].includes(kind)) {
+      where.kind = kind;
+    }
     // 隐藏实况图的视频组件（已被合并到对应图片条目中）
     const { Op } = require("sequelize");
-    if (category && ["image", "video", "audio", "file"].includes(category)) {
+    if (category && ["image", "video", "audio", "file"].includes(category) && !kind) {
       // 根据类型筛选 MIME 前缀
       const mimeMap: Record<string, string[]> = {
         image: ["image/%"],
@@ -161,7 +173,7 @@ router.post("/presign", authenticate, requireAdmin, async (req: AuthRequest, res
     const { kind: approvedKind, rule } = getDirectUploadRule(kind, filename, mimeType);
     const intent = await UploadIntent.create({
       uploaderId: req.user!.id,
-      kind: approvedKind,
+      kind: approvedKind as MediaKind,
       filename: path.basename(filename),
       mimeType,
       maxSize: rule.maxSize,
@@ -220,6 +232,7 @@ router.post("/confirm", authenticate, requireAdmin, async (req: AuthRequest, res
       url,
       storageType: "r2",
       mimeType: intent.mimeType,
+      kind: intent.kind,
       size: object.size,
       uploaderId: intent.uploaderId,
     });
@@ -232,6 +245,40 @@ router.post("/confirm", authenticate, requireAdmin, async (req: AuthRequest, res
     res.status(500).json({ message: err.message || "登记媒体记录失败" });
   }
 });
+
+// GET /api/media/:id/text — 读取本人上传的小型歌词文件，不代理音频。
+router.get(
+  "/:id/text",
+  authenticate,
+  requireAdmin,
+  [param("id").isUUID()],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      res.status(400).json({ errors: errors.array() });
+      return;
+    }
+    const media = await Media.findOne({
+      where: { id: String(req.params.id), uploaderId: req.user!.id, storageType: "r2", kind: "lyric" },
+    });
+    if (!media) {
+      res.status(404).json({ message: "歌词文件不存在" });
+      return;
+    }
+    if (Number(media.size) > DIRECT_UPLOAD_RULES.lyric.maxSize) {
+      res.status(413).json({ message: "歌词文件过大" });
+      return;
+    }
+    try {
+      const key = extractR2Key(media.url);
+      if (!key) throw new Error("无法识别 R2 文件地址");
+      const buffer = await downloadFromR2(key, DIRECT_UPLOAD_RULES.lyric.maxSize);
+      res.json({ id: media.id, filename: media.filename, text: buffer.toString("utf8") });
+    } catch (error: any) {
+      res.status(502).json({ message: error.message || "读取歌词文件失败" });
+    }
+  }
+);
 
 // POST /api/media/live-photo — 将同一管理员上传的图片和视频登记为实况图配对
 // body: { imageMediaId: string, videoMediaId: string }
@@ -278,7 +325,7 @@ router.delete(
     }
 
     const playlistReference = await MusicTrack.findOne({
-      where: { [Op.or]: [{ audioMediaId: media.id }, { coverMediaId: media.id }] },
+      where: { [Op.or]: [{ audioMediaId: media.id }, { coverMediaId: media.id }, { lyricMediaId: media.id }] },
       attributes: ["id"],
     });
     if (playlistReference) {

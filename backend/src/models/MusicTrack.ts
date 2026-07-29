@@ -6,6 +6,7 @@ interface MusicTrackAttributes {
   playlistId: string;
   audioMediaId: string;
   coverMediaId: string | null;
+  lyricMediaId: string | null;
   title: string;
   artist: string;
   lrc: string;
@@ -16,7 +17,7 @@ interface MusicTrackAttributes {
 
 type MusicTrackCreationAttributes = Optional<
   MusicTrackAttributes,
-  "id" | "coverMediaId" | "artist" | "lrc" | "sortOrder" | "createdAt" | "updatedAt"
+  "id" | "coverMediaId" | "lyricMediaId" | "artist" | "lrc" | "sortOrder" | "createdAt" | "updatedAt"
 >;
 
 class MusicTrack
@@ -27,6 +28,7 @@ class MusicTrack
   declare playlistId: string;
   declare audioMediaId: string;
   declare coverMediaId: string | null;
+  declare lyricMediaId: string | null;
   declare title: string;
   declare artist: string;
   declare lrc: string;
@@ -58,6 +60,12 @@ MusicTrack.init(
       defaultValue: null,
       field: "cover_media_id",
     },
+    lyricMediaId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      defaultValue: null,
+      field: "lyric_media_id",
+    },
     title: {
       type: DataTypes.STRING(255),
       allowNull: false,
@@ -70,6 +78,7 @@ MusicTrack.init(
     lrc: {
       type: DataTypes.TEXT,
       allowNull: false,
+      defaultValue: "",
     },
     sortOrder: {
       type: DataTypes.INTEGER,
@@ -94,6 +103,7 @@ MusicTrack.init(
       { unique: true, fields: ["playlist_id", "sort_order"] },
       { fields: ["audio_media_id"] },
       { fields: ["cover_media_id"] },
+      { fields: ["lyric_media_id"] },
     ],
   }
 );

@@ -3,7 +3,10 @@ import { getApiUrl } from "./api-fetch";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 const BASE_URL = API_URL.replace(/\/api$/, "");
 
-export type DirectUploadKind = "image" | "video" | "audio" | "file";
+export type DirectUploadKind = "image" | "video" | "audio" | "lyric" | "file";
+export type MediaKind = DirectUploadKind;
+export const AUDIO_FILE_ACCEPT = ".mp3,.wav,.ogg,.opus,.aac,.m4a,.flac,audio/mpeg,audio/wav,audio/ogg,audio/opus,audio/aac,audio/mp4,audio/flac";
+export const LYRIC_FILE_ACCEPT = ".lrc,text/plain";
 export type DirectUploadPhase = "presign" | "put" | "confirm" | "network";
 
 export interface DirectUploadOptions {
@@ -19,6 +22,7 @@ export interface UploadedMedia {
   mimeType: string;
   size: number;
   category: "image" | "video" | "audio" | "file";
+  kind: MediaKind;
 }
 
 /** A safe, user-displayable failure. It deliberately never retains a presigned URL. */
@@ -55,7 +59,8 @@ function normalizedMimeType(file: File): string {
   const byExtension: Record<string, string> = {
     jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp",
     mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm", "3gp": "video/3gpp", m4v: "video/x-m4v",
-    mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", aac: "audio/aac",
+    mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", opus: "audio/opus", aac: "audio/aac", m4a: "audio/mp4", flac: "audio/flac",
+    lrc: "text/plain",
   };
   return byExtension?.[extension || ""] || "application/octet-stream";
 }
@@ -107,8 +112,11 @@ export async function uploadDirect(
     throw new DirectUploadError("presign", await readError(presign, "获取上传地址失败"), presign.status);
   }
 
-  const { intentId, uploadUrl } = await presign.json();
+  const { intentId, uploadUrl, maxSize } = await presign.json();
   if (!intentId || !uploadUrl) throw new DirectUploadError("presign", "上传服务返回了无效的上传地址。");
+  if (Number(maxSize) > 0 && file.size > Number(maxSize)) {
+    throw new DirectUploadError("presign", `文件大小超过 ${(Number(maxSize) / 1024 / 1024).toFixed(0)}MB 限制。`);
+  }
 
   options.onProgress?.(0);
   let put: Response;

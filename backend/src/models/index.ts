@@ -45,8 +45,10 @@ MusicPlaylist.hasMany(MusicTrack, { foreignKey: "playlistId", as: "tracks", onDe
 MusicTrack.belongsTo(MusicPlaylist, { foreignKey: "playlistId", as: "playlist" });
 MusicTrack.belongsTo(Media, { foreignKey: "audioMediaId", as: "audio" });
 MusicTrack.belongsTo(Media, { foreignKey: "coverMediaId", as: "cover" });
+MusicTrack.belongsTo(Media, { foreignKey: "lyricMediaId", as: "lyricMedia" });
 Media.hasMany(MusicTrack, { foreignKey: "audioMediaId", as: "audioPlaylistTracks" });
 Media.hasMany(MusicTrack, { foreignKey: "coverMediaId", as: "coverPlaylistTracks" });
+Media.hasMany(MusicTrack, { foreignKey: "lyricMediaId", as: "lyricPlaylistTracks" });
 
 CatalogCategory.hasMany(CatalogItem, { foreignKey: "categoryId", as: "items", onDelete: "CASCADE" });
 CatalogItem.belongsTo(CatalogCategory, { foreignKey: "categoryId", as: "category" });
@@ -73,3 +75,4 @@ export {
   siteSettingTextDefaults,
 };
 export { getMediaCategory } from "./Media";
+export type { MediaKind } from "./Media";

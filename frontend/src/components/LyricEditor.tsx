@@ -18,7 +18,7 @@ function formatTime(sec: number): string {
   return `${mm}:${ss}.${xx}`;
 }
 
-const TIME_STAMP_REGEX = /^\[\d{2}:\d{2}\.\d{2,3}\]\s*/;
+const TIME_STAMP_REGEX = /^(?:\[\d{1,3}:\d{2}(?:\.\d{2,3})?\]\s*)+/;
 
 export default function LyricEditor({ audioUrl, value, onChange }: LyricEditorProps) {
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
@@ -28,12 +28,7 @@ export default function LyricEditor({ audioUrl, value, onChange }: LyricEditorPr
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // 切换音频源时重置状态
-  useEffect(() => {
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setCurrentLineIndex(0);
-  }, [audioUrl]);
+  // 切换音频源时由 audio 事件更新状态，key 负责重建音频元素。
 
   const togglePlay = () => {
     const audio = audioRef.current;
@@ -96,13 +91,15 @@ export default function LyricEditor({ audioUrl, value, onChange }: LyricEditorPr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioUrl]);
 
-  const lineCount = value ? value.split("\n").filter((l) => l.trim()).length : 0;
+  const lines = value ? value.split("\n") : [];
+  const lineCount = lines.length;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <div className="rounded-xl border border-wechat-border bg-wechat-bubble/50 p-3 dark:border-white/10 dark:bg-white/[0.03]">
       {/* 隐藏的音频元素 */}
       <audio
+        key={audioUrl}
         ref={audioRef}
         src={audioUrl || undefined}
         onPlay={() => setIsPlaying(true)}

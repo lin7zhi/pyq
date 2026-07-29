@@ -14,13 +14,15 @@ async function getDefaultPlaylist() {
   return playlist;
 }
 
-function serializeTrack(track: MusicTrack & { audio?: Media; cover?: Media }) {
+function serializeTrack(track: MusicTrack & { audio?: Media; cover?: Media; lyricMedia?: Media }) {
   const audio = track.audio;
   const cover = track.cover;
   return {
     id: track.id,
     audioMediaId: track.audioMediaId,
     coverMediaId: track.coverMediaId,
+    lyricMediaId: track.lyricMediaId,
+    lyricFilename: track.lyricMedia?.filename || "",
     name: track.title,
     title: track.title,
     artist: track.artist,
@@ -40,10 +42,11 @@ async function loadDefaultPlaylist() {
     include: [
       { model: Media, as: "audio", required: true },
       { model: Media, as: "cover", required: false },
+      { model: Media, as: "lyricMedia", required: false },
     ],
     order: [["sortOrder", "ASC"], ["createdAt", "ASC"]],
   });
-  return { playlist, tracks: tracks as Array<MusicTrack & { audio?: Media; cover?: Media }> };
+  return { playlist, tracks: tracks as Array<MusicTrack & { audio?: Media; cover?: Media; lyricMedia?: Media }> };
 }
 
 async function getOwnedMedia(id: unknown, userId: string, category: "audio" | "image") {
@@ -51,6 +54,11 @@ async function getOwnedMedia(id: unknown, userId: string, category: "audio" | "i
   const media = await Media.findOne({ where: { id, uploaderId: userId, storageType: "r2" } });
   if (!media || !media.mimeType.startsWith(`${category}/`)) return null;
   return media;
+}
+
+async function getOwnedLyricMedia(id: unknown, userId: string) {
+  if (typeof id !== "string") return null;
+  return Media.findOne({ where: { id, uploaderId: userId, storageType: "r2", kind: "lyric" } });
 }
 
 function readText(value: unknown, field: string, maxLength: number, required = false) {
@@ -131,6 +139,12 @@ router.post("/admin/tracks", authenticate, requireAdmin, async (req: AuthRequest
       res.status(400).json({ message: "封面必须是本人上传的 R2 图片" });
       return;
     }
+    const lyricMediaId = req.body?.lyricMediaId;
+    const lyricMedia = lyricMediaId ? await getOwnedLyricMedia(lyricMediaId, req.user!.id) : null;
+    if (lyricMediaId && !lyricMedia) {
+      res.status(400).json({ message: "歌词文件必须是本人上传的 R2 歌词媒体" });
+      return;
+    }
     const title = readText(req.body?.title, "歌曲名称", 255, false) || audio.filename.replace(/\.[^.]+$/, "") || "未命名歌曲";
     const artist = readText(req.body?.artist, "歌手", 255, false) || "";
     const lrc = readText(req.body?.lrc, "歌词", 100_000, false) || "";
@@ -140,15 +154,16 @@ router.post("/admin/tracks", authenticate, requireAdmin, async (req: AuthRequest
       playlistId: playlist.id,
       audioMediaId: audio.id,
       coverMediaId: cover?.id || null,
+      lyricMediaId: lyricMedia?.id || null,
       title,
       artist,
       lrc,
       sortOrder: Number.isFinite(maxOrder) ? Number(maxOrder) + 1 : 0,
     });
     const full = await MusicTrack.findByPk(track.id, {
-      include: [{ model: Media, as: "audio" }, { model: Media, as: "cover", required: false }],
+      include: [{ model: Media, as: "audio" }, { model: Media, as: "cover", required: false }, { model: Media, as: "lyricMedia", required: false }],
     });
-    res.status(201).json(serializeTrack(full as MusicTrack & { audio?: Media; cover?: Media }));
+    res.status(201).json(serializeTrack(full as MusicTrack & { audio?: Media; cover?: Media; lyricMedia?: Media }));
   } catch (err: any) {
     res.status(400).json({ message: err.message || "添加歌曲失败" });
   }
@@ -163,7 +178,7 @@ router.patch("/admin/tracks/:id", authenticate, requireAdmin, async (req: AuthRe
       res.status(404).json({ message: "歌曲不存在" });
       return;
     }
-    const updates: Partial<Pick<MusicTrack, "audioMediaId" | "coverMediaId" | "title" | "artist" | "lrc">> = {};
+    const updates: Partial<Pick<MusicTrack, "audioMediaId" | "coverMediaId" | "lyricMediaId" | "title" | "artist" | "lrc">> = {};
     if (req.body?.audioMediaId !== undefined) {
       const audio = await getOwnedMedia(req.body.audioMediaId, req.user!.id, "audio");
       if (!audio) {
@@ -183,6 +198,17 @@ router.patch("/admin/tracks/:id", authenticate, requireAdmin, async (req: AuthRe
         updates.coverMediaId = cover.id;
       }
     }
+    if (req.body?.lyricMediaId !== undefined) {
+      if (!req.body.lyricMediaId) updates.lyricMediaId = null;
+      else {
+        const lyricMedia = await getOwnedLyricMedia(req.body.lyricMediaId, req.user!.id);
+        if (!lyricMedia) {
+          res.status(400).json({ message: "歌词文件必须是本人上传的 R2 歌词媒体" });
+          return;
+        }
+        updates.lyricMediaId = lyricMedia.id;
+      }
+    }
     const title = readText(req.body?.title, "歌曲名称", 255);
     const artist = readText(req.body?.artist, "歌手", 255);
     const lrc = readText(req.body?.lrc, "歌词", 100_000);
@@ -191,9 +217,9 @@ router.patch("/admin/tracks/:id", authenticate, requireAdmin, async (req: AuthRe
     if (lrc !== undefined) updates.lrc = lrc;
     await track.update(updates);
     const full = await MusicTrack.findByPk(track.id, {
-      include: [{ model: Media, as: "audio" }, { model: Media, as: "cover", required: false }],
+      include: [{ model: Media, as: "audio" }, { model: Media, as: "cover", required: false }, { model: Media, as: "lyricMedia", required: false }],
     });
-    res.json(serializeTrack(full as MusicTrack & { audio?: Media; cover?: Media }));
+    res.json(serializeTrack(full as MusicTrack & { audio?: Media; cover?: Media; lyricMedia?: Media }));
   } catch (err: any) {
     res.status(400).json({ message: err.message || "更新歌曲失败" });
   }
@@ -241,7 +267,7 @@ router.delete("/admin/tracks/:id", authenticate, requireAdmin, async (req: AuthR
 
 export async function isMediaUsedByPlaylist(mediaId: string) {
   return MusicTrack.findOne({
-    where: { [Op.or]: [{ audioMediaId: mediaId }, { coverMediaId: mediaId }] },
+    where: { [Op.or]: [{ audioMediaId: mediaId }, { coverMediaId: mediaId }, { lyricMediaId: mediaId }] },
     attributes: ["id"],
   });
 }

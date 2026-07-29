@@ -127,15 +127,19 @@ export async function uploadToR2(
  * （绕开 Vercel 函数体积限制），confirm 阶段再由后端拉回来处理
  * （如动态照片拆分图片/视频），处理完成后原始合并文件通常会被删除。
  */
-export async function downloadFromR2(key: string): Promise<Buffer> {
+export async function downloadFromR2(key: string, maxBytes?: number): Promise<Buffer> {
   const { client, cfg } = getClient();
   const resp = await client.send(new GetObjectCommand({ Bucket: cfg.bucket, Key: key }));
   const body = resp.Body;
   if (!body) throw new Error("R2 对象为空");
   const chunks: Buffer[] = [];
+  let total = 0;
   // @ts-ignore - Node 环境下 Body 是可迭代的 Readable 流
   for await (const chunk of body as AsyncIterable<Buffer>) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.length;
+    if (maxBytes !== undefined && total > maxBytes) throw new Error("R2 对象超过允许的读取大小");
+    chunks.push(buffer);
   }
   return Buffer.concat(chunks);
 }

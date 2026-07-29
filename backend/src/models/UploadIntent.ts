@@ -1,7 +1,7 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import sequelize from "../config/database";
 
-export type UploadIntentKind = "image" | "video" | "audio" | "file";
+export type UploadIntentKind = "image" | "video" | "audio" | "lyric" | "file";
 export type UploadIntentStatus = "pending" | "confirmed" | "expired";
 
 interface UploadIntentAttributes {

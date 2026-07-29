@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { getGlobalAudio } from "@/lib/global-audio";
 import { useMusicPlayer, type LyricLine, type PlaylistTrack } from "@/lib/music-player-store";
 import { useSiteSettings } from "@/lib/site-settings-store";
@@ -34,11 +34,47 @@ function parseLyric(lrc: string): LyricLine[] | null {
 export default function GlobalMusicManager() {
   const initialized = useRef(false);
 
+  const fetchPlaylist = useCallback(async () => {
+    const response = await fetch(`${API_URL}/music`, { cache: "no-store" });
+    return response.ok ? response.json() : {};
+  }, []);
+
+  const refreshPlaylist = useCallback(async () => {
+    const data = await fetchPlaylist();
+    const playlist: PlaylistTrack[] = Array.isArray(data.playlist)
+      ? data.playlist.map((track: PlaylistTrack) => ({ ...track, mp3url: toAbsolute(track.mp3url) }))
+      : [];
+    const audio = getGlobalAudio();
+    const previous = useMusicPlayer.getState();
+    const previousId = previous.musicId;
+    const previousUrl = audio?.src || previous.musicUrl;
+    const wasPlaying = !!audio && !audio.paused;
+    previous.replacePlaylist(playlist, previousId);
+    const next = useMusicPlayer.getState();
+    if (!previous.activePostMusic && audio) {
+      if (!next.musicUrl) {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+      } else if (previousUrl && new URL(previousUrl, window.location.href).href !== new URL(next.musicUrl, window.location.href).href) {
+        audio.src = next.musicUrl;
+        if (wasPlaying) audio.play().catch(() => next.setAudioError(true, "R2 音频文件无法播放，请稍后重试。"));
+        else audio.load();
+      }
+    }
+  }, [fetchPlaylist]);
+
+  useEffect(() => {
+    const onUpdated = () => { void refreshPlaylist(); };
+    window.addEventListener("music-playlist-updated", onUpdated);
+    return () => window.removeEventListener("music-playlist-updated", onUpdated);
+  }, [refreshPlaylist]);
+
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
     Promise.all([
-      fetch(`${API_URL}/music`).then((response) => (response.ok ? response.json() : {})),
+      fetchPlaylist(),
       useSiteSettings.getState().fetchSettings(),
     ])
       .then(([data]: [{ mp3url?: string; name?: string; id?: string; lyric?: string; playlist?: PlaylistTrack[]; currentIndex?: number; musicAutoplay?: boolean }, void]) => {
@@ -68,7 +104,7 @@ export default function GlobalMusicManager() {
         }
       })
       .catch(() => useMusicPlayer.setState({ musicLoaded: true, switching: false }));
-  }, []);
+  }, [fetchPlaylist]);
 
   useEffect(() => {
     const audio = getGlobalAudio();

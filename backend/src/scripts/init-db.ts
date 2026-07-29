@@ -7,6 +7,7 @@ import { migrateDoubanCache } from "./migrate-douban-cache";
 import { migrateFooterHtml } from "./migrate-footer-html";
 import { migrateDecorationImage } from "./migrate-decoration-image";
 import { migrateCatalogItemFields } from "./migrate-catalog-item-fields";
+import { migrateR2MusicFields } from "./migrate-r2-music-fields";
 
 const DEFAULT_PLAYLIST_SLUG = "site-default";
 
@@ -106,6 +107,7 @@ export async function initializeDatabase() {
   await migrateFooterHtml();
   await migrateDecorationImage();
   await migrateCatalogItemFields();
+  await migrateR2MusicFields();
 
   await ensureSiteSettings();
   await ensureDefaultPlaylist();

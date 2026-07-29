@@ -1,4 +1,4 @@
-import { Media } from "../models";
+import { Media, getMediaCategory, type MediaKind } from "../models";
 import {
   buildObjectKey,
   createPresignedUpload as createR2PresignedUpload,
@@ -47,6 +47,7 @@ export async function storeFileAndRecordMedia(
     url,
     storageType,
     mimeType,
+    kind: getMediaCategory(mimeType) as MediaKind,
     size: buffer.length,
     uploaderId,
   });

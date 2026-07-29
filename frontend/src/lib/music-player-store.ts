@@ -70,6 +70,7 @@ interface MusicPlayerState {
     playlist: PlaylistTrack[];
     currentIndex: number;
   }) => void;
+  replacePlaylist: (playlist: PlaylistTrack[], preferredTrackId?: string) => void;
   prepareTrack: (index: number) => { track: PlaylistTrack; url: string } | null;
   setLyric: (lyric: LyricLine[] | null) => void;
   setCurrentLyricIndex: (index: number) => void;
@@ -135,6 +136,23 @@ export const useMusicPlayer = create<MusicPlayerState>((set, get) => ({
       currentIndex: data.currentIndex,
       musicLoaded: true,
       switching: false,
+    });
+  },
+  replacePlaylist: (playlist, preferredTrackId) => {
+    const currentId = preferredTrackId || get().musicId;
+    const matchingIndex = playlist.findIndex((track) => track.id === currentId);
+    const currentIndex = matchingIndex >= 0 ? matchingIndex : Math.min(get().currentIndex, Math.max(0, playlist.length - 1));
+    const track = playlist[currentIndex];
+    set({
+      playlist,
+      currentIndex,
+      musicUrl: track?.mp3url || "",
+      musicName: track?.name || "",
+      musicId: track?.id || "",
+      musicLoaded: true,
+      switching: false,
+      audioError: false,
+      audioErrorMessage: "",
     });
   },
   prepareTrack: (index) => {
