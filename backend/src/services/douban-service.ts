@@ -49,6 +49,13 @@ interface ScrapeResult {
   complete: boolean;
 }
 
+interface ParsedPage {
+  items: DoubanItem[];
+  candidateCount: number;
+  confirmedEmpty: boolean;
+  error?: string;
+}
+
 interface SyncLease {
   id: string;
   setting: SiteSetting;
@@ -121,28 +128,53 @@ function normalizeSnapshot(raw: string | null, doubanId: string): DoubanCollecti
   }
 }
 
-function parseItems(html: string, type: CollectionType, status: DoubanStatus): DoubanItem[] {
+function parseItems(html: string, type: CollectionType, status: DoubanStatus): ParsedPage {
   const $ = cheerio.load(html);
+  const pageText = $.root().text();
+  if (/登录豆瓣|安全验证|异常请求|访问过于频繁|验证码|captcha/i.test(pageText) || $("input[type='password'], form[action*='login'], form[action*='passport']").length) {
+    return { items: [], candidateCount: 0, confirmedEmpty: false, error: "received login or verification page" };
+  }
+
+  const selector = type === "book" ? "li.subject-item" : ".item";
+  const candidates = $(selector);
   const items: DoubanItem[] = [];
   const statusLabel = STATUS_LABELS[type][status];
-  $(".item").each((_, el) => {
+  candidates.each((_, el) => {
     const $el = $(el);
-    const title = $el.find(".title a").text().trim();
+    const $title = type === "book" ? $el.find(".info h2 a").first() : $el.find(".title a").first();
+    const title = $title.text().trim();
     if (!title) return;
     const ratingMatch = ($el.find("[class*='rating']").attr("class") || "").match(/rating(\d)-t/);
     items.push({
       title,
-      link: $el.find(".title a").attr("href") || $el.find(".nbg").attr("href") || "",
-      cover: $el.find("img").attr("src") || "",
+      link: $title.attr("href") || $el.find(".nbg").attr("href") || "",
+      cover: $el.find(".nbg img").attr("src") || $el.find("img").first().attr("src") || "",
       date: $el.find(".date").text().trim(),
-      intro: $el.find(".intro").text().trim(),
+      intro: (type === "book" ? $el.find(".pub").text() : $el.find(".intro").text()).trim(),
       comment: $el.find(".comment").text().trim(),
       rating: ratingMatch ? Number(ratingMatch[1]) : 0,
       status,
       statusLabel,
     });
   });
-  return items;
+
+  if (candidates.length === 0) {
+    const hasCollectionLayout = type === "book"
+      ? $("ul.interest-list, .subject-num").length > 0
+      : $(".grid-view, .list-view, .paginator").length > 0;
+    return {
+      items,
+      candidateCount: 0,
+      confirmedEmpty: hasCollectionLayout,
+      ...(hasCollectionLayout ? {} : { error: "unrecognized collection page" }),
+    };
+  }
+  return {
+    items,
+    candidateCount: candidates.length,
+    confirmedEmpty: false,
+    ...(items.length === candidates.length ? {} : { error: "item extraction mismatch" }),
+  };
 }
 
 function remainingTimeout(deadline: number): number {
@@ -171,15 +203,19 @@ async function scrapeCollection(type: CollectionType, doubanId: string, status: 
         errors.push(`${type}/${status}: HTTP ${resp.status}`);
         return { items, errors, complete: false };
       }
-      const pageItems = parseItems(resp.data, type, status);
-      for (const item of pageItems) {
+      const parsed = parseItems(resp.data, type, status);
+      if (parsed.error) {
+        errors.push(`${type}/${status}: ${parsed.error}`);
+        return { items, errors, complete: false };
+      }
+      for (const item of parsed.items) {
         const key = item.link || `${item.title}:${item.date}:${item.status}`;
         if (!seen.has(key)) {
           seen.add(key);
           items.push(item);
         }
       }
-      if (pageItems.length < PAGE_SIZE) return { items, errors, complete: true };
+      if (parsed.confirmedEmpty || parsed.candidateCount < PAGE_SIZE) return { items, errors, complete: true };
       if (page === MAX_PAGES_PER_STATUS - 1) {
         errors.push(`${type}/${status}: pagination limit reached`);
         return { items, errors, complete: false };
