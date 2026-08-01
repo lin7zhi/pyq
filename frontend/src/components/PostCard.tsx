@@ -583,6 +583,10 @@ export default function PostCard({ post, index, onDelete }: PostCardProps) {
               setReplyTo(undefined);
               setShowComments(false);
             }}
+            onClose={() => {
+              setReplyTo(undefined);
+              setShowComments(false);
+            }}
             autoFocus
           />
         )}

@@ -454,6 +454,10 @@ export default function PostDetail({ post }: PostDetailProps) {
                 setReplyTo(undefined);
                 setShowComments(false);
               }}
+              onClose={() => {
+                setReplyTo(undefined);
+                setShowComments(false);
+              }}
               autoFocus
             />
           )}

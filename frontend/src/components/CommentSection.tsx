@@ -22,6 +22,8 @@ interface CommentSectionProps {
   connected?: boolean;
   /** 挂载时自动聚焦编辑器（详情页点击"评论"按钮后直接弹出手机键盘） */
   autoFocus?: boolean;
+  /** 点击回复指示旁的打叉时关闭整个评论组件 */
+  onClose?: () => void;
 }
 
 interface VisitorInfo {
@@ -45,6 +47,7 @@ export default function CommentSection({
   onCommentSubmitted,
   connected = false,
   autoFocus = false,
+  onClose,
 }: CommentSectionProps) {
   const [comments, setComments] = useState<Comment[]>(initialComments);
   const [content, setContent] = useState("");
@@ -221,6 +224,12 @@ export default function CommentSection({
     onReplyCleared?.();
   };
 
+  const closeCommentSection = () => {
+    setReplyTo(undefined);
+    onReplyCleared?.();
+    onClose?.();
+  };
+
   const saveSelection = useCallback(() => {
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0) {
@@ -363,9 +372,9 @@ export default function CommentSection({
           {replyTo && (
             <button
               type="button"
-              onClick={cancelReply}
+              onClick={onClose ? closeCommentSection : cancelReply}
               className="text-wechat-time transition-colors hover:text-wechat-text"
-              aria-label="取消回复"
+              aria-label={onClose ? "关闭评论" : "取消回复"}
             >
               <X className="h-4 w-4" />
             </button>
