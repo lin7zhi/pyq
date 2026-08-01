@@ -369,15 +369,26 @@ export default function CommentSection({
               修改信息
             </button>
           )}
-          {replyTo && (
+          {onClose ? (
             <button
               type="button"
-              onClick={onClose ? closeCommentSection : cancelReply}
+              onClick={closeCommentSection}
               className="text-wechat-time transition-colors hover:text-wechat-text"
-              aria-label={onClose ? "关闭评论" : "取消回复"}
+              aria-label="关闭评论"
             >
               <X className="h-4 w-4" />
             </button>
+          ) : (
+            replyTo && (
+              <button
+                type="button"
+                onClick={cancelReply}
+                className="text-wechat-time transition-colors hover:text-wechat-text"
+                aria-label="取消回复"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )
           )}
         </div>
       </div>
