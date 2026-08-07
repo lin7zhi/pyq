@@ -330,7 +330,7 @@ router.put(
     await comment.update({
       authorName: req.body.author.trim(),
       email: req.body.email?.trim().toLowerCase() || "",
-      website: req.body.website?.trim() || undefined,
+      website: req.body.website?.trim() || null,
       content: req.body.content.trim(),
     });
 
